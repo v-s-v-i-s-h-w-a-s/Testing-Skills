@@ -1,0 +1,119 @@
+title: GitHub Actions Basics
+description: Learn how to use GitHub Actions for CI/CD pipelines and integrate AGILE-SCRUM practices
+template:
+  repo: github-skills/github-actions-basics-template
+  name: GitHub Actions Basics
+
+# Course metadata
+metadata:
+  title: GitHub Actions Basics
+  description: >
+    Learn how to set up GitHub Actions workflows for continuous integration and continuous deployment.
+    Master Git fundamentals, GitHub collaboration, and AGILE-SCRUM practices.
+  template: false
+  estimated_time: 4-6 hours
+  topics:
+    - GitHub Actions
+    - CI/CD
+    - Git
+    - GitHub
+    - AGILE
+    - SCRUM
+    - Automation
+    - DevOps
+
+# Define the course progression steps
+steps:
+  - title: Setup your GitHub repository
+    description: Learn how to set up your repository for GitHub Actions
+    event: issue.opened
+    stepType: start
+    link: '{{ store.firstIssueUrl }}'
+    actions:
+      - type: respondWithIssueComment
+        data: 
+          issue: '%payload.issue.number%'
+          comment_id: 01-setup-repo
+
+  - title: Create your first GitHub Action workflow
+    description: Create a simple GitHub Action that runs on push events
+    event: push
+    link: '{{ store.firstIssueUrl }}#step-2'
+    actions:
+      - type: gate
+        every: true
+        gates:
+          - left: '%payload.ref%'
+            operator: ===
+            right: refs/heads/main
+          - left: '%payload.commits[0].modified%'
+            operator: includes
+            right: .github/workflows/hello-world.yml
+      - type: createReview
+        body: 02-first-workflow-feedback
+        event: APPROVE
+
+  - title: Build a basic CI workflow
+    description: Implement a continuous integration workflow that runs tests
+    event: push
+    link: '{{ store.firstIssueUrl }}#step-3'
+    actions:
+      - type: gate
+        every: true
+        gates:
+          - left: '%payload.ref%'
+            operator: ===
+            right: refs/heads/feature-branch
+          - left: '%payload.commits[0].modified%'
+            operator: includes
+            right: .github/workflows/ci-workflow.yml
+      - type: createReview
+        body: 03-ci-workflow-feedback
+        event: APPROVE
+
+  - title: Set up continuous deployment
+    description: Create a workflow that deploys your application automatically
+    event: pull_request.opened
+    link: '{{ store.firstIssueUrl }}#step-4'
+    actions:
+      - type: gate
+        every: true
+        gates:
+          - left: '%payload.pull_request.base.ref%'
+            operator: ===
+            right: main
+          - left: '%payload.pull_request.head.ref%'
+            operator: ===
+            right: feature-branch
+          - left: '%files.includes%'
+            operator: includes
+            right: .github/workflows/cd-workflow.yml
+      - type: createReview
+        body: 04-cd-workflow-feedback
+        event: APPROVE
+
+  - title: Implement AGILE-SCRUM practices with GitHub
+    description: Learn how to use GitHub issues, projects, and pull requests for AGILE-SCRUM
+    event: issue.labeled
+    link: '{{ store.firstIssueUrl }}#step-5'
+    actions:
+      - type: gate
+        every: true
+        gates:
+          - left: '%payload.label.name%'
+            operator: ===
+            right: agile-scrum
+      - type: createIssueComment
+        body: 05-agile-scrum-feedback
+        issue: '%payload.issue.number%'
+
+  - title: Finalize your GitHub Actions workflow
+    description: Optimize your workflows and celebrate completion
+    event: pull_request.merged
+    link: '{{ store.firstIssueUrl }}#step-6'
+    actions:
+      - type: createIssueComment
+        body: 06-course-completion
+        issue: '%payload.issue.number%'
+      - type: closeIssue
+        issue: '%payload.issue.number%'

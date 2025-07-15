@@ -1,0 +1,24 @@
+name: Hello World
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  hello:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+      
+    - name: Say Hello
+      run: echo "Hello, GitHub Actions!"
+      
+    - name: Show Workflow Information
+      run: |
+        echo "Repository: $GITHUB_REPOSITORY"
+        echo "Branch: $GITHUB_REF"
+        echo "Event: $GITHUB_EVENT_NAME"

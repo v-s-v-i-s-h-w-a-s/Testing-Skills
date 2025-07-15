@@ -1,0 +1,43 @@
+name: Project Board Automation
+
+on:
+  issues:
+    types: [opened, reopened, closed, labeled, unlabeled]
+  pull_request:
+    types: [opened, reopened, closed, review_requested]
+
+jobs:
+  automate_projects:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Move new issues into Backlog
+        if: github.event_name == 'issues' && github.event.action == 'opened'
+        uses: alex-page/github-project-automation-plus@v0.8.3
+        with:
+          project: AGILE-SCRUM Demo
+          column: Backlog
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Move issues with 'in-progress' label to In Progress
+        if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'in-progress'
+        uses: alex-page/github-project-automation-plus@v0.8.3
+        with:
+          project: AGILE-SCRUM Demo
+          column: In Progress
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Move closed issues to Done
+        if: github.event_name == 'issues' && github.event.action == 'closed'
+        uses: alex-page/github-project-automation-plus@v0.8.3
+        with:
+          project: AGILE-SCRUM Demo
+          column: Done
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          
+      - name: Move PRs awaiting review into Review column
+        if: github.event_name == 'pull_request' && github.event.action == 'review_requested'
+        uses: alex-page/github-project-automation-plus@v0.8.3
+        with:
+          project: AGILE-SCRUM Demo
+          column: Review
+          repo-token: ${{ secrets.GITHUB_TOKEN }}

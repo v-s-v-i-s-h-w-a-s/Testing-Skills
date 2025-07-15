@@ -1,0 +1,163 @@
+name: Step 3, CD Workflow
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened]
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+env:
+  STEP_4_FILE: ".github/steps/04-cd-workflow-feedback.md"
+
+jobs:
+  check_pr_source:
+    name: Check Pull Request Source
+    runs-on: ubuntu-latest
+    outputs:
+      is_feature_branch: ${{ steps.check-pr.outputs.result }}
+    steps:
+      - name: Get PR details
+        id: check-pr
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            if (context.payload.pull_request) {
+              const headRef = context.payload.pull_request.head.ref;
+              console.log(`PR is from branch: ${headRef}`);
+              return headRef === 'feature-branch';
+            }
+            return false;
+          result-encoding: string
+
+  check_cd_workflow:
+    name: Check for CD Workflow
+    needs: check_pr_source
+    if: ${{ fromJSON(needs.check_pr_source.outputs.is_feature_branch) }}
+    runs-on: ubuntu-latest
+    outputs:
+      workflow_exists: ${{ steps.check-workflow.outputs.workflow_exists }}
+      server_exists: ${{ steps.check-server.outputs.server_exists }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature-branch
+
+      - name: Check for CD workflow
+        id: check-workflow
+        run: |
+          if [ -f .github/workflows/cd-workflow.yml ]; then
+            echo "CD workflow exists"
+            echo "workflow_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "CD workflow does not exist yet"
+            echo "workflow_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for server files
+        id: check-server
+        run: |
+          if [ -f server.js ] && [ -f server.test.js ]; then
+            echo "Server files exist"
+            echo "server_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Server files do not exist yet"
+            echo "server_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+  provide_feedback:
+    name: Provide Feedback
+    needs: [check_pr_source, check_cd_workflow]
+    if: ${{ always() && fromJSON(needs.check_pr_source.outputs.is_feature_branch) }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Approve PR
+        if: ${{ needs.check_cd_workflow.outputs.workflow_exists == 'true' && needs.check_cd_workflow.outputs.server_exists == 'true' }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.rest.pulls.createReview({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+              event: 'APPROVE',
+              body: 'Your CD workflow looks great! This PR is approved and ready to be merged.'
+            });
+
+      - name: Create comment
+        if: ${{ needs.check_cd_workflow.outputs.workflow_exists == 'true' && needs.check_cd_workflow.outputs.server_exists == 'true' }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const responseData = JSON.parse(fs.readFileSync('response.json', 'utf8'));
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `## Great job on your CD workflow! 🚀\n\nYou've successfully created a continuous deployment workflow that will automatically deploy your application.\n\n${responseData.responses.encouragement[2]}`
+            });
+
+            // Post next step content
+            const stepContent = fs.readFileSync('${{ env.STEP_4_FILE }}', 'utf8');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: stepContent
+            });
+
+            // Enable next workflow
+            const { execSync } = require('child_process');
+            execSync('gh workflow enable "Step 4, AGILE SCRUM"', { env: process.env });
+
+      - name: Get open issues
+        id: get-issues
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              creator: context.repo.owner,
+              sort: 'created',
+              direction: 'desc'
+            });
+
+            if (issues.data.length > 0) {
+              return { number: issues.data[0].number };
+            }
+            return { number: null };
+
+      - name: Post to course issue
+        if: ${{ needs.check_cd_workflow.outputs.workflow_exists == 'true' && needs.check_cd_workflow.outputs.server_exists == 'true' && steps.get-issues.outputs.result != 'null' }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issueNumber = JSON.parse('${{ steps.get-issues.outputs.result }}').number;
+
+            if (issueNumber) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `## Pull Request Created 🎯\n\nYour pull request has been created and approved! You can merge it now to trigger your CD workflow.`
+              });
+            }

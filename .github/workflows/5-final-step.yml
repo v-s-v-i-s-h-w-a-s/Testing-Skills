@@ -1,0 +1,100 @@
+name: Step 5, Final Step
+
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [closed]
+    branches:
+      - main
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+env:
+  COMPLETION_FILE: ".github/steps/06-course-completion.md"
+
+jobs:
+  check_pr_merged:
+    name: Check if PR is Merged
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true && github.event.pull_request.head.ref == 'feature-branch'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check for optimized workflow
+        id: check-workflow
+        run: |
+          if [ -f .github/workflows/optimized-ci-cd.yml ]; then
+            echo "Optimized workflow exists"
+            echo "workflow_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Optimized workflow does not exist yet"
+            echo "workflow_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Get course issue
+        id: get-issues
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              sort: 'created',
+              direction: 'desc'
+            });
+
+            // Find the main course issue
+            const courseIssue = issues.data.find(issue => 
+              issue.title.includes('GitHub Actions Basics') || 
+              issue.title.includes('Course'));
+              
+            if (courseIssue) {
+              return { 
+                exists: true,
+                number: courseIssue.number
+              };
+            }
+            return { exists: false };
+
+      - name: Post completion message
+        if: ${{ steps.check-workflow.outputs.workflow_exists == 'true' && fromJSON(steps.get-issues.outputs.result).exists == true }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const courseIssueNumber = JSON.parse('${{ steps.get-issues.outputs.result }}').number;
+
+            // Post completion comment to PR
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body: `## 🎉 Congratulations!\n\nYou've successfully merged your changes and completed this part of the course. Check the main course issue for final completion message.`
+            });
+
+            if (courseIssueNumber) {
+              // Post completion message to course issue
+              const completionContent = fs.readFileSync('${{ env.COMPLETION_FILE }}', 'utf8');
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: courseIssueNumber,
+                body: completionContent
+              });
+              
+              // Close the course issue
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: courseIssueNumber,
+                state: 'closed'
+              });
+            }

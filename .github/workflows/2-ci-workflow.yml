@@ -1,0 +1,135 @@
+name: Step 2, CI Workflow
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature-branch
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+env:
+  STEP_3_FILE: ".github/steps/03-ci-workflow-feedback.md"
+
+jobs:
+  verify_branch:
+    name: Verify Branch Creation
+    runs-on: ubuntu-latest
+    outputs:
+      branch_exists: ${{ steps.verify-branch.outputs.branch_exists }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify branch creation
+        id: verify-branch
+        run: |
+          if git branch -r | grep -q "origin/feature-branch"; then
+            echo "Branch feature-branch exists"
+            echo "branch_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "Branch feature-branch does not exist yet"
+            echo "branch_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+  check_ci_workflow:
+    name: Check for CI Workflow
+    needs: verify_branch
+    if: ${{ needs.verify_branch.outputs.branch_exists == 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      workflow_exists: ${{ steps.check-workflow.outputs.workflow_exists }}
+      app_exists: ${{ steps.check-app.outputs.app_exists }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: feature-branch
+
+      - name: Check for CI workflow
+        id: check-workflow
+        run: |
+          if [ -f .github/workflows/ci-workflow.yml ]; then
+            echo "CI workflow exists"
+            echo "workflow_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "CI workflow does not exist yet"
+            echo "workflow_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check for app files
+        id: check-app
+        run: |
+          if [ -f app.js ] && [ -f app.test.js ] && [ -f package.json ]; then
+            echo "App files exist"
+            echo "app_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "App files do not exist yet"
+            echo "app_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+  provide_feedback:
+    name: Provide Feedback
+    needs: [verify_branch, check_ci_workflow]
+    if: ${{ always() && needs.verify_branch.outputs.branch_exists == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get open issues
+        id: get-issues
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              creator: context.repo.owner
+            });
+
+            if (issues.data.length > 0) {
+              return { number: issues.data[0].number };
+            }
+            return { number: null };
+
+      - name: Create comment
+        if: ${{ needs.check_ci_workflow.outputs.workflow_exists == 'true' && needs.check_ci_workflow.outputs.app_exists == 'true' && steps.get-issues.outputs.result != 'null' }}
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const issueNumber = JSON.parse('${{ steps.get-issues.outputs.result }}').number;
+
+            if (issueNumber) {
+              const responseData = JSON.parse(fs.readFileSync('response.json', 'utf8'));
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `## Excellent work on your CI workflow! 🔄\n\nYou've successfully created a CI workflow with automated testing. This is an essential part of modern software development.\n\n${responseData.responses.encouragement[1]}`
+              });
+              
+              // Post next step content
+              const stepContent = fs.readFileSync('${{ env.STEP_3_FILE }}', 'utf8');
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: stepContent
+              });
+              
+              // Enable next workflow
+              const { execSync } = require('child_process');
+              execSync('gh workflow enable "Step 3, CD Workflow"', { env: process.env });
+            }

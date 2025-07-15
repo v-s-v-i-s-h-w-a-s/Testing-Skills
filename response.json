@@ -1,0 +1,65 @@
+{
+  "responses": {
+    "welcome": {
+      "title": "Welcome to GitHub Actions Basics!",
+      "message": "Hi there! 👋 I'm Mona, your GitHub Skills guide for this course. I'll help you learn GitHub Actions step-by-step. Let's get started!",
+      "emoji": "rocket"
+    },
+    "start_course": {
+      "title": "Ready to begin?",
+      "message": "I've set everything up for you. Click the button below to start the course.",
+      "emoji": "sparkles"
+    },
+    "step_completed": {
+      "title": "Great job! ✅",
+      "message": "You've completed step {{stepNumber}}. Let's move on to the next challenge!",
+      "emoji": "tada"
+    },
+    "step_failed": {
+      "title": "Hmm, not quite right 🤔",
+      "message": "It looks like something isn't working as expected. Let me help you troubleshoot.",
+      "emoji": "thinking"
+    },
+    "hints": {
+      "workflow_syntax": "Remember that GitHub Actions workflows are written in YAML and should be placed in the `.github/workflows` directory.",
+      "job_structure": "Each job in a workflow runs on a fresh instance of the runner environment and can contain multiple steps.",
+      "ci_workflow": "For Continuous Integration, make sure your workflow includes steps to check out code, set up dependencies, and run tests.",
+      "cd_workflow": "For Continuous Deployment, consider using environment secrets for sensitive deployment credentials.",
+      "agile_scrum": "Use GitHub Projects to organize your work into sprints and track progress on your AGILE board."
+    },
+    "validation_messages": {
+      "file_missing": "I couldn't find the file `{{fileName}}`. Make sure you've created it in the correct location.",
+      "workflow_invalid": "Your workflow file contains syntax errors. Check your YAML indentation and structure.",
+      "branch_missing": "I couldn't find the branch `{{branchName}}`. Make sure you've created it with the exact name specified.",
+      "commit_missing": "I don't see a commit with the expected changes. Make sure you've committed your changes to the repository.",
+      "pr_missing": "I don't see an open pull request from `{{headBranch}}` to `{{baseBranch}}`. Make sure you've created it correctly."
+    },
+    "encouragement": [
+      "You're doing great! Keep going! 🚀",
+      "Excellent progress! You're really getting the hang of this! 💪",
+      "That's exactly right! You're on the right track! ✨",
+      "Perfect! You're becoming a GitHub Actions expert! 🎯",
+      "Awesome job! You're making fantastic progress! 🌟"
+    ],
+    "completion": {
+      "title": "Congratulations! 🎉",
+      "message": "You've successfully completed the GitHub Actions Basics course! You now have the skills to create powerful CI/CD pipelines and implement AGILE-SCRUM practices with GitHub.",
+      "emoji": "graduate"
+    },
+    "step_feedback": {
+      "01-setup-repo": "Great job setting up your repository! Now you're ready to start creating GitHub Actions workflows.",
+      "02-first-workflow-feedback": "Excellent! Your first GitHub Action workflow is running successfully. This is the foundation for all the automation you'll build in this course.",
+      "03-ci-workflow-feedback": "Your CI workflow looks good! You've set up automated testing that will run every time code is pushed to your repository.",
+      "04-cd-workflow-feedback": "Perfect! Your CD workflow is set up to deploy your application automatically when changes are merged.",
+      "05-agile-scrum-feedback": "You've successfully implemented AGILE-SCRUM practices with GitHub! Your project is now organized using agile methodologies.",
+      "06-course-completion": "Congratulations on completing the GitHub Actions Basics course! You now have the skills to automate your workflows, implement CI/CD pipelines, and integrate AGILE-SCRUM methodologies into your development process."
+    },
+    "error_messages": {
+      "generic_error": "Oops! Something went wrong. Let's try again.",
+      "workflow_error": "Your workflow isn't running correctly. Let's check the syntax and structure.",
+      "permission_error": "It looks like you might not have the necessary permissions to perform this action.",
+      "network_error": "There seems to be a network issue. Please check your connection and try again.",
+      "timeout_error": "The operation took longer than expected. Please try again."
+    }
+  }
+}

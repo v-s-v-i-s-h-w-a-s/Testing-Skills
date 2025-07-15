@@ -11,7 +11,7 @@ permissions:
   issues: write # Create issue and comment on issues
 
 env:
-  STEP_1_FILE: ".github/steps/1-create-a-branch.md"
+  STEP_1_FILE: ".github/steps/01-setup-repo.md"
 
 jobs:
   start_exercise:
@@ -20,8 +20,8 @@ jobs:
     name: Start Exercise
     uses: skills/exercise-toolkit/.github/workflows/start-exercise.yml@v0.7.0
     with:
-      exercise-title: "Introduction to GitHub"
-      intro-message: "If you are new to GitHub, you might find your fellow developers use ___**issues**___  to organize their work and collaborate. We will do the same! That's another lesson, but today, we will introduce you to the basics."
+      exercise-title: "GitHub Actions Basics"
+      intro-message: "Welcome to GitHub Actions Basics! In this course, you'll learn how to leverage GitHub Actions to automate your workflows, implement CI/CD pipelines, and integrate AGILE-SCRUM methodologies into your development process."
 
   post_next_step_content:
     name: Post next step content
@@ -58,6 +58,6 @@ jobs:
 
       - name: Disable current workflow and enable next one
         run: |
-          gh workflow enable "Step 1"
+          gh workflow enable "Step 1, Setup Actions"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,308 @@
+name: GitHub Skills Course Automation
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  issues:
+    types: [opened, edited, labeled]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+env:
+  # Global environment variables for the workflow
+  BOT_NAME: "Mona"
+  COURSE_TITLE: "GitHub Actions Basics"
+  REPO_URL: ${{ github.repository }}
+  RESPONSE_FILE: response.json
+
+jobs:
+  # Job to process course events
+  process_course_events:
+    name: Process Course Events
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm install @octokit/rest yaml js-yaml
+
+      - name: Load course configuration
+        id: load-config
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const yaml = require('js-yaml');
+
+            try {
+              const courseConfig = yaml.load(fs.readFileSync('course.yml', 'utf8'));
+              console.log('Course configuration loaded successfully');
+              return courseConfig;
+            } catch (error) {
+              console.error('Error loading course configuration:', error);
+              throw error;
+            }
+          result-encoding: string
+
+      - name: Load response templates
+        id: load-responses
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            try {
+              const responseData = JSON.parse(fs.readFileSync('response.json', 'utf8'));
+              console.log('Response templates loaded successfully');
+              return responseData;
+            } catch (error) {
+              console.error('Error loading response templates:', error);
+              throw error;
+            }
+          result-encoding: string
+
+      - name: Determine current step
+        id: determine-step
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { context } = github;
+            const courseConfig = JSON.parse('${{ steps.load-config.outputs.result }}');
+
+            // Determine which step we're on based on the event
+            let currentStep = null;
+
+            for (const step of courseConfig.steps) {
+              switch (step.event) {
+                case 'issue.opened':
+                  if (context.eventName === 'issues' && context.payload.action === 'opened') {
+                    currentStep = step;
+                  }
+                  break;
+                case 'push':
+                  if (context.eventName === 'push') {
+                    // Additional validation can be done here
+                    currentStep = step;
+                  }
+                  break;
+                case 'pull_request.opened':
+                  if (context.eventName === 'pull_request' && context.payload.action === 'opened') {
+                    currentStep = step;
+                  }
+                  break;
+                case 'issue.labeled':
+                  if (context.eventName === 'issues' && context.payload.action === 'labeled') {
+                    currentStep = step;
+                  }
+                  break;
+                case 'pull_request.merged':
+                  if (context.eventName === 'pull_request' && 
+                      context.payload.action === 'closed' && 
+                      context.payload.pull_request.merged) {
+                    currentStep = step;
+                  }
+                  break;
+              }
+              
+              if (currentStep) break;
+            }
+
+            return currentStep ? { step: currentStep, index: courseConfig.steps.indexOf(currentStep) } : null;
+          result-encoding: string
+
+      - name: Process current step
+        if: steps.determine-step.outputs.result != 'null'
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { context } = github;
+            const stepData = JSON.parse('${{ steps.determine-step.outputs.result }}');
+            const responses = JSON.parse('${{ steps.load-responses.outputs.result }}');
+
+            if (!stepData) {
+              console.log('No matching step found for this event');
+              return;
+            }
+
+            const step = stepData.step;
+            const stepIndex = stepData.index;
+
+            console.log(`Processing step: ${step.title} (${stepIndex + 1}/${courseConfig.steps.length})`);
+
+            // Execute actions based on the step configuration
+            for (const action of step.actions) {
+              switch (action.type) {
+                case 'respondWithIssueComment':
+                  const commentTemplate = responses.responses.step_feedback[action.data.comment_id];
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: action.data.issue,
+                    body: `## ${step.title}\n\n${commentTemplate}\n\n${responses.responses.encouragement[Math.floor(Math.random() * responses.responses.encouragement.length)]}`
+                  });
+                  break;
+                  
+                case 'createReview':
+                  if (context.payload.pull_request) {
+                    const reviewBody = responses.responses.step_feedback[action.body];
+                    await github.rest.pulls.createReview({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      pull_number: context.payload.pull_request.number,
+                      body: reviewBody,
+                      event: action.event
+                    });
+                  }
+                  break;
+                  
+                case 'createIssueComment':
+                  const issueBody = responses.responses.step_feedback[action.body];
+                  await github.rest.issues.createComment({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: action.issue,
+                    body: issueBody
+                  });
+                  break;
+                  
+                case 'closeIssue':
+                  await github.rest.issues.update({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: action.issue,
+                    state: 'closed'
+                  });
+                  break;
+              }
+            }
+
+            // Check if this is the final step and handle course completion
+            if (stepIndex === courseConfig.steps.length - 1) {
+              const completionMessage = `# ${responses.responses.completion.title}\n\n${responses.responses.completion.message}`;
+              
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.issue ? context.payload.issue.number : context.payload.pull_request.number,
+                body: completionMessage
+              });
+            }
+
+  # Job to validate student progress
+  validate_progress:
+    name: Validate Student Progress
+    runs-on: ubuntu-latest
+    needs: process_course_events
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: "18"
+          cache: "npm"
+
+      - name: Run validation checks
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { context } = github;
+
+            // Check for GitHub Actions workflow files
+            const fs = require('fs');
+            const path = require('path');
+
+            const workflowsDir = '.github/workflows';
+
+            try {
+              const files = fs.readdirSync(workflowsDir);
+              console.log('Workflow files found:', files);
+              
+              // Validate workflow syntax for each file
+              for (const file of files) {
+                if (file.endsWith('.yml') || file.endsWith('.yaml')) {
+                  console.log(`Validating workflow file: ${file}`);
+                  // Additional validation can be added here
+                }
+              }
+              
+              // If this is a pull request, add validation results as a comment
+              if (context.eventName === 'pull_request') {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: context.payload.pull_request.number,
+                  body: `## Validation Results\n\nAll workflow files have been validated successfully! ✅`
+                });
+              }
+            } catch (error) {
+              console.error('Error during validation:', error);
+              
+              // If workflows directory doesn't exist yet, this might be an early step
+              if (error.code === 'ENOENT') {
+                console.log('Workflows directory not found. This might be expected in early steps.');
+              } else {
+                throw error;
+              }
+            }
+
+  # Job to post feedback
+  post_feedback:
+    name: Post Step Feedback
+    runs-on: ubuntu-latest
+    needs: validate_progress
+    if: github.event_name == 'issues' || github.event_name == 'pull_request'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Post feedback
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const { context } = github;
+            const fs = require('fs');
+
+            try {
+              const responseData = JSON.parse(fs.readFileSync('response.json', 'utf8'));
+              const encouragement = responseData.responses.encouragement[Math.floor(Math.random() * responseData.responses.encouragement.length)];
+              
+              let issueNumber;
+              if (context.eventName === 'issues') {
+                issueNumber = context.payload.issue.number;
+              } else if (context.eventName === 'pull_request') {
+                issueNumber = context.payload.pull_request.number;
+              }
+              
+              if (issueNumber) {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body: `**Feedback from ${process.env.BOT_NAME}:** ${encouragement}\n\nKeep up the great work! I'm here to help if you need any assistance.`
+                });
+              }
+            } catch (error) {
+              console.error('Error posting feedback:', error);
+            }

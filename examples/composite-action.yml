@@ -1,0 +1,24 @@
+name: 'Setup Project'
+description: 'Sets up Node.js and installs dependencies'
+inputs:
+  node-version:
+    description: 'Node.js version'
+    required: false
+    default: '18.x'
+  install-command:
+    description: 'Command to install dependencies'
+    required: false
+    default: 'npm ci'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: 'npm'
+        
+    - name: Install dependencies
+      shell: bash
+      run: ${{ inputs.install-command }}

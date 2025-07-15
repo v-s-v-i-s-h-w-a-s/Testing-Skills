@@ -1,0 +1,136 @@
+name: Step 4, AGILE SCRUM
+
+on:
+  workflow_dispatch:
+  issues:
+    types: [labeled]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+env:
+  STEP_5_FILE: ".github/steps/05-agile-scrum-feedback.md"
+
+jobs:
+  check_issue_label:
+    name: Check Issue Label
+    runs-on: ubuntu-latest
+    if: github.event_name == 'issues' && github.event.action == 'labeled' && github.event.label.name == 'agile-scrum'
+    outputs:
+      is_valid: ${{ steps.check-label.outputs.is_valid }}
+    steps:
+      - name: Verify label
+        id: check-label
+        run: |
+          if [ "${{ github.event.label.name }}" == "agile-scrum" ]; then
+            echo "Issue has the agile-scrum label"
+            echo "is_valid=true" >> $GITHUB_OUTPUT
+          else
+            echo "Issue does not have the required label"
+            echo "is_valid=false" >> $GITHUB_OUTPUT
+          fi
+
+  provide_feedback:
+    name: Provide Feedback
+    needs: check_issue_label
+    if: ${{ needs.check_issue_label.outputs.is_valid == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Get project board
+        id: check-project
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              const projects = await github.rest.projects.listForRepo({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                state: 'open'
+              });
+              
+              const agileScrumProject = projects.data.find(project => 
+                project.name.toLowerCase().includes('agile') || 
+                project.name.toLowerCase().includes('scrum'));
+                
+              return { 
+                exists: !!agileScrumProject,
+                id: agileScrumProject ? agileScrumProject.id : null,
+                name: agileScrumProject ? agileScrumProject.name : null
+              };
+            } catch (error) {
+              console.log(`Error checking project: ${error}`);
+              return { exists: false };
+            }
+
+      - name: Create comment
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const fs = require('fs');
+            const responseData = JSON.parse(fs.readFileSync('response.json', 'utf8'));
+            const projectExists = JSON.parse('${{ steps.check-project.outputs.result }}').exists;
+
+            let feedbackMessage = `## Great job implementing AGILE-SCRUM practices! 📊\n\n`;
+
+            if (projectExists) {
+              feedbackMessage += `You've successfully created a project board for AGILE-SCRUM practices. This will help you organize your work using agile methodologies.\n\n`;
+            } else {
+              feedbackMessage += `You've started implementing AGILE-SCRUM practices. Consider creating a project board to better organize your work.\n\n`;
+            }
+
+            feedbackMessage += `${responseData.responses.encouragement[3]}`;
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: feedbackMessage
+            });
+
+            // Post next step content
+            const stepContent = fs.readFileSync('${{ env.STEP_5_FILE }}', 'utf8');
+
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.issue.number,
+              body: stepContent
+            });
+
+            // Enable next workflow
+            const { execSync } = require('child_process');
+            execSync('gh workflow enable "Step 5, Final Step"', { env: process.env });
+
+      - name: Add checklist to issue
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || '';
+
+            if (!body.includes('- [ ]')) {
+              const checklistItems = [
+                '- [ ] Create a GitHub Project board',
+                '- [ ] Set up sprint columns',
+                '- [ ] Create user stories as issues',
+                '- [ ] Assign story points',
+                '- [ ] Plan a sprint'
+              ];
+              
+              const updatedBody = body + '\n\n## AGILE-SCRUM Checklist\n' + checklistItems.join('\n');
+              
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: updatedBody
+              });
+            }
