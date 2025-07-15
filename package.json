@@ -1,0 +1,11 @@
+{
+  "name": "github-skills-course",
+  "version": "1.0.0",
+  "description": "GitHub Skills Course for GitHub Actions",
+  "private": true,
+  "dependencies": {
+    "@octokit/rest": "^19.0.13",
+    "js-yaml": "^4.1.0",
+    "yaml": "^2.3.4"
+  }
+}
